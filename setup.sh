@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sudo apt -y update
-sudo apt -y install dnsperf python3
+sudo apt -y install dnsperf python3 tmux nload
 
 # Clone the repo
 git clone https://github.com/0x7d4-khonshu/dbox-test.git
