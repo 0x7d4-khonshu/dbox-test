@@ -1,20 +1,34 @@
 #!/bin/bash
 
 sudo apt -y update
-sudo apt -y install dnsperf
+sudo apt -y install dnsperf python3
 
-# Update package lists and install dnsperf
+# Clone the repo
 git clone https://github.com/0x7d4-khonshu/dbox-test.git
-
 
 echo "dnsperf installation complete!"
 
+# Change to repo directory
+cd dbox-test
+
 # Make the run script executable
-cd dbox-test && chmod +x run_dnsperf.sh
+chmod +x run_dnsperf.py
+
+# Ask for inputs
+echo ""
+echo "============================================"
+echo "Available CSV files:"
+ls -1 dnsperf_files/ 2>/dev/null || echo "  (files will be available after running split_domains.py)"
+echo "============================================"
+echo ""
+
+read -p "Enter file number (1-10): " FILE_NUM
+read -p "Enter DNS server IP [default: 8.8.8.8]: " DNS_SERVER
+DNS_SERVER=${DNS_SERVER:-8.8.8.8}
 
 echo ""
-echo "To run dnsperf, use:"
-echo "  ./run_dnsperf.sh <file_number> [dns_server]"
+echo "Starting dnsperf with file $FILE_NUM and DNS server $DNS_SERVER..."
 echo ""
-echo "Example for anchor 1: ./run_dnsperf.sh 1 8.8.8.8"
-echo "Example for anchor 5: ./run_dnsperf.sh 5 1.1.1.1"
+
+# Run the Python script
+python3 run_dnsperf.py $FILE_NUM $DNS_SERVER

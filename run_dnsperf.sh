@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run resperf with a specific CSV file
+# Run dnsperf with a specific CSV file
 # Usage: ./run_dnsperf.sh <file_number> <dns_server>
 # Example: ./run_dnsperf.sh 1 8.8.8.8
 
@@ -28,7 +28,7 @@ if [ -z "$CSV_FILE" ]; then
 fi
 
 echo "============================================"
-echo "Running resperf with:"
+echo "Running dnsperf with:"
 echo "  File: $CSV_FILE"
 echo "  DNS Server: $DNS_SERVER"
 echo "============================================"
@@ -36,16 +36,20 @@ echo "============================================"
 # Log the start of run
 echo "$(date '+%Y-%m-%d %H:%M:%S') - File $FILE_NUM STARTED - $CSV_FILE - DNS: $DNS_SERVER" >> $LOG_FILE
 
-# Run resperf with max QPS settings
-# -m: max queries per second (100000)
+# Run dnsperf with max QPS settings
 # -c: number of clients (100)
-# -r: ramp up rate - queries per second increase per second (10000)
-resperf -s $DNS_SERVER -d $CSV_FILE -m 100000 -c 100 -r 10000
+# -Q: max queries per second (1000000)
+# -q: number of queries to send (1000000)
+# -T: number of threads (6)
+# -l: run limit in seconds (20)
+# -S: stats interval (1)
+# -t: timeout in seconds (30)
+dnsperf -s $DNS_SERVER -d $CSV_FILE -c 100 -Q 1000000 -q 1000000 -T 6 -l 20 -S 1 -t 30
 
 # Log the completed run
 echo "$(date '+%Y-%m-%d %H:%M:%S') - File $FILE_NUM COMPLETED - $CSV_FILE - DNS: $DNS_SERVER" >> $LOG_FILE
 
 echo "============================================"
-echo "resperf completed for file $FILE_NUM"
+echo "dnsperf completed for file $FILE_NUM"
 echo "Run logged to $LOG_FILE"
 echo "============================================"
