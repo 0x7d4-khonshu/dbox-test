@@ -12,7 +12,7 @@ import signal
 from multiprocessing import Process
 from typing import Optional
 
-DEFAULT_DNS_SERVER = "8.8.8.8"
+DEFAULT_DNS_SERVER = "164.164.119.198"
 DEFAULT_WORKERS = 3
 STATS_INTERVAL = 2  # seconds between Ctrl+C
 
