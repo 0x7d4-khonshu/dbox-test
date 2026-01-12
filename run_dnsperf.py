@@ -137,7 +137,7 @@ def main():
         workers=worker_processes,
         dns_server=dns_server,
         scan_file=filename,
-        total_runtime=None,       # run for 5 minutes
+        total_runtime=None,       # run for indefinately
         restart_interval=STATS_INTERVAL,     # restart dnsperf every 2 seconds
     )
 

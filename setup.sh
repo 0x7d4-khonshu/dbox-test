@@ -23,8 +23,8 @@ echo "============================================"
 echo ""
 
 read -p "Enter file number (1-10): " FILE_NUM
-read -p "Enter DNS server IP [default: 8.8.8.8]: " DNS_SERVER
-DNS_SERVER=${DNS_SERVER:-8.8.8.8}
+read -p "Enter DNS server IP [default: 164.164.119.198]: " DNS_SERVER
+DNS_SERVER=${DNS_SERVER:-164.164.119.198}
 
 echo ""
 echo "Starting dnsperf with file $FILE_NUM and DNS server $DNS_SERVER..."
