@@ -1,15 +1,16 @@
 #!/bin/bash
 
-# Update package lists and install dnsperf
-git clone https://github.com/0x7d4-khonshu/dbox-test.git
-cd dbox-test
 sudo apt -y update
 sudo apt -y install dnsperf
+
+# Update package lists and install dnsperf
+git clone https://github.com/0x7d4-khonshu/dbox-test.git
+
 
 echo "dnsperf installation complete!"
 
 # Make the run script executable
-chmod +x run_dnsperf.sh
+cd dbox-test && chmod +x run_dnsperf.sh
 
 echo ""
 echo "To run dnsperf, use:"
