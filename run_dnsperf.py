@@ -4,26 +4,26 @@ Run dnsperf with periodic stats capture.
 Sends SIGINT (Ctrl+C) every 2 seconds to capture stats, then logs results.
 """
 
-import subprocess
-import signal
-import sys
-import os
 import glob
-from datetime import datetime
-import time
+import shlex
+import subprocess
+import time, sys
+import signal
+from multiprocessing import Process
+from typing import Optional
 
-# Configuration
 DEFAULT_DNS_SERVER = "8.8.8.8"
-LOG_FILE = "run_log.txt"
+DEFAULT_WORKERS = 3
 STATS_INTERVAL = 2  # seconds between Ctrl+C
 
-def log_message(message):
-    """Log a message with timestamp to the log file."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"{timestamp} - {message}"
-    print(log_entry)
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(log_entry + "\n")
+
+MAX_UNIQUE_CLIENT = 10
+MAX_QUERIES = 1000000
+MAX_OUTSTANDING_QUERIES = 1000000
+MAX_THREADS = 6
+MAX_TIME = 20
+PRINT_STATS = 1
+MAX_TIMEOUT = 30
 
 def find_csv_file(file_num):
     """Find the CSV file matching the file number."""
@@ -43,145 +43,105 @@ def list_available_files():
     else:
         print("No CSV files found in dnsperf_files/")
 
-def run_dnsperf(file_num, dns_server):
-    """Run dnsperf and capture stats every 2 seconds."""
-    csv_file = find_csv_file(file_num)
+
+
+def run_scan(
+    dns_server: str,
+    scan_file: str,
+    total_runtime: int,
+    restart_interval: int,
+):
+    """
+    Run dnsperf in a loop, restarting it every restart_interval seconds,
+    until total_runtime seconds have elapsed.
+    """
+
+    cmd = f"dnsperf -s {dns_server} -d {scan_file} -c {MAX_UNIQUE_CLIENT} -Q {MAX_QUERIES} -q {MAX_OUTSTANDING_QUERIES} -T {MAX_THREADS} -l {MAX_TIME} -S {PRINT_STATS} -t {MAX_TIMEOUT}"
+
+    start_time = time.time()
+    proc: Optional[subprocess.Popen] = None
+    _proc: Optional[subprocess.Popen] = None
     
-    if not csv_file:
-        print(f"Error: No file found for number {file_num}")
-        list_available_files()
-        return 1
-    
-    # dnsperf command
-    cmd = [
-        "dnsperf",
-        "-s", dns_server,
-        "-d", csv_file,
-        "-c", "100",
-        "-Q", "1000000",
-        "-q", "1000000",
-        "-T", "6",
-        "-l", "20",
-        "-S", "1",
-        "-t", "30"
-    ]
-    
-    print("=" * 50)
-    print("Running dnsperf with:")
-    print(f"  File: {csv_file}")
-    print(f"  DNS Server: {dns_server}")
-    print(f"  Stats capture interval: {STATS_INTERVAL} seconds")
-    print("=" * 50)
-    
-    log_message(f"File {file_num} STARTED - {csv_file} - DNS: {dns_server}")
-    
-    try:
-        # Start dnsperf process
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
+    while (not total_runtime) or (time.time() - start_time < total_runtime):
+        while proc and proc.poll() is None:
+            proc.send_signal(signal.SIGKILL)
+
+        proc: Optional[subprocess.Popen] = _proc
+        try:
+            # Let it run for restart_interval seconds
+            time.sleep(restart_interval)
+        except Exception as ex:
+            pass
+
+        finally:
+            _proc = subprocess.Popen(
+                shlex.split(cmd),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN),
+            )
+
+            # Kill previous process only if it's still running
+            if proc and proc.poll() is None:
+                proc.send_signal(signal.SIGKILL)
+
+    # Final cleanup and kill anything still running
+    for p in (proc, _proc):
+        if p and p.poll() is None:
+            p.send_signal(signal.SIGKILL)
+
+
+def run_parallel_scans(
+    workers: int,
+    dns_server: str,
+    scan_file: str,
+    total_runtime: int,
+    restart_interval: int,
+):
+    """
+    Launch multiple parallel dnsperf scan workers.
+    """
+
+    processes = []
+
+    for _ in range(workers):
+        p = Process(
+            target=run_scan,
+            args=(dns_server, scan_file, total_runtime, restart_interval),
         )
-        
-        start_time = time.time()
-        output_lines = []
-        
-        # Read output while process runs
-        while True:
-            # Check if process has finished
-            return_code = process.poll()
-            if return_code is not None:
-                # Process finished, read remaining output
-                remaining = process.stdout.read()
-                if remaining:
-                    output_lines.append(remaining)
-                    print(remaining, end='')
-                break
-            
-            # Read available output
-            try:
-                line = process.stdout.readline()
-                if line:
-                    output_lines.append(line)
-                    print(line, end='')
-            except:
-                pass
-            
-            # Check if it's time to send SIGINT for stats
-            elapsed = time.time() - start_time
-            if elapsed >= STATS_INTERVAL:
-                try:
-                    # Send SIGINT to get stats
-                    process.send_signal(signal.SIGINT)
-                    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Sent Ctrl+C for stats capture")
-                    start_time = time.time()
-                    time.sleep(0.5)  # Brief pause to let stats print
-                except:
-                    break
-        
-        # Save all output to log
-        full_output = ''.join(output_lines)
-        log_message(f"File {file_num} COMPLETED - Stats:\n{full_output}")
-        
-    except FileNotFoundError:
-        print("Error: dnsperf not installed. Run: sudo apt install dnsperf")
-        return 1
-    except KeyboardInterrupt:
-        print("\nInterrupted by user")
-        process.terminate()
-        log_message(f"File {file_num} INTERRUPTED by user")
-        return 1
-    except Exception as e:
-        print(f"Error: {e}")
-        log_message(f"File {file_num} ERROR - {e}")
-        return 1
-    
-    print("=" * 50)
-    print(f"dnsperf completed for file {file_num}")
-    print(f"Run logged to {LOG_FILE}")
-    print("=" * 50)
-    
-    return 0
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
+
 
 def main():
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <file_number> [dns_server]")
-        print(f"Example: {sys.argv[0]} 1 8.8.8.8")
+        print(f"Usage: {sys.argv[0]} <file_number> [dns_server = 8.8.8.8] <workers = 3>")
+        print(f"Example: {sys.argv[0]} 1 8.8.8.8 2")
         print()
         list_available_files()
         return 1
     
     file_num = sys.argv[1]
     dns_server = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_DNS_SERVER
-    
-    print("=" * 50)
-    print("Running in continuous loop mode")
-    print("Press Ctrl+C to stop")
-    print("=" * 50)
-    
-    run_count = 0
-    try:
-        while True:
-            run_count += 1
-            log_message(f"=== RUN #{run_count} ===")
-            print(f"\n{'='*50}")
-            print(f"Starting run #{run_count}")
-            print(f"{'='*50}\n")
-            
-            result = run_dnsperf(file_num, dns_server)
-            
-            if result != 0:
-                print(f"Run #{run_count} had an error, continuing...")
-            
-            print(f"\nRun #{run_count} completed. Starting next run...\n")
-            time.sleep(1)  # Brief pause between runs
-            
-    except KeyboardInterrupt:
-        print(f"\n\nStopped by user after {run_count} runs")
-        log_message(f"STOPPED by user after {run_count} runs")
-        return 0
+    worker_processes = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_WORKERS
+
+    filename = find_csv_file(file_num)
+    if not filename:
+        print("Wrong file number")
+        exit(1)
+
+    run_parallel_scans(
+        workers=worker_processes,
+        dns_server=dns_server,
+        scan_file=filename,
+        total_runtime=None,       # run for 5 minutes
+        restart_interval=STATS_INTERVAL,     # restart dnsperf every 2 seconds
+    )
+
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
+
