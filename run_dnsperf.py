@@ -156,7 +156,32 @@ def main():
     file_num = sys.argv[1]
     dns_server = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_DNS_SERVER
     
-    return run_dnsperf(file_num, dns_server)
+    print("=" * 50)
+    print("Running in continuous loop mode")
+    print("Press Ctrl+C to stop")
+    print("=" * 50)
+    
+    run_count = 0
+    try:
+        while True:
+            run_count += 1
+            log_message(f"=== RUN #{run_count} ===")
+            print(f"\n{'='*50}")
+            print(f"Starting run #{run_count}")
+            print(f"{'='*50}\n")
+            
+            result = run_dnsperf(file_num, dns_server)
+            
+            if result != 0:
+                print(f"Run #{run_count} had an error, continuing...")
+            
+            print(f"\nRun #{run_count} completed. Starting next run...\n")
+            time.sleep(1)  # Brief pause between runs
+            
+    except KeyboardInterrupt:
+        print(f"\n\nStopped by user after {run_count} runs")
+        log_message(f"STOPPED by user after {run_count} runs")
+        return 0
 
 if __name__ == "__main__":
     sys.exit(main())
